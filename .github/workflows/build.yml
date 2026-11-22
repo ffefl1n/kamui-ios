@@ -1,0 +1,69 @@
+name: Build & Release KAMUI Extended
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base source tree and apply enhancements
+        run: |
+          echo "[*] Fetching base upstream assets..."
+          git clone --depth 1 https://github.com/murk-sus/kamui-escape.git /tmp/upstream
+          cp -rn /tmp/upstream/* ./ || true
+          cp -rn /tmp/upstream/.* ./ 2>/dev/null || true
+          rm -rf .git/modules 2>/dev/null || true
+          echo "[*] Applying extended patches..."
+          python3 patch_extended.py
+
+      - name: Commit all assets to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Populate full source tree and apply KAMUI Extended patches" || echo "No changes to commit"
+          git push origin main || echo "Push up-to-date"
+
+      - name: Build IPA
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KAMUI-Extended-ipa
+          path: build/*.ipa
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.5.3
+          name: KAMUI Extended v2.5.3
+          body: |
+            ### 🚀 KAMUI Extended v2.5.3
+            Собрано автоматически через GitHub Actions на macOS (`macos-latest`).
+
+            #### ✨ Что нового / New Features:
+            - **Mute Shutter Sound:** Отключение звука затвора камеры для устройств из Японии и Южной Кореи.
+            - **Camera Control Button:** Программная поддержка кнопки Camera Control (из iPhone 16).
+            - **Lockscreen Dimming (LGLPM):** Затемнение экрана блокировки.
+            - **iPad Apps on iPhone:** Включение поддержки запуска приложений для iPad на iPhone.
+            - **Dynamic Island Presets:** Быстрый выбор сабтайпа `iPhone Air (2736)` для минимального наложения на чёлку.
+            - **Clean App Caches:** В меню Настройки ➔ Инструменты добавлена быстрая очистка кэшей приложений для освобождения места в памяти.
+          files: build/*.ipa
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
