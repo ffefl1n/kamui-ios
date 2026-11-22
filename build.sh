@@ -3,10 +3,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 if [ -z "${SDK:-}" ]; then
-    if [ -d /opt/theos/sdks/iPhoneOS14.5.sdk ]; then
-        SDK="/opt/theos/sdks/iPhoneOS14.5.sdk"
-    elif command -v xcrun >/dev/null 2>&1; then
+    if command -v xcrun >/dev/null 2>&1; then
         SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+    elif [ -d /opt/theos/sdks/iPhoneOS14.5.sdk ]; then
+        SDK="/opt/theos/sdks/iPhoneOS14.5.sdk"
     else
         SDK="/opt/theos/sdks/iPhoneOS14.5.sdk"
     fi
@@ -18,17 +18,26 @@ BUILD="$ROOT/build"
 APP="$BUILD/Payload/$APP_NAME.app"
 
 echo "[*] SDK: $SDK"
-[ -d "$SDK" ] || { echo "[!] SDK missing"; exit 1; }
+[ -d "$SDK" ] || { echo "[!] SDK missing: $SDK"; exit 1; }
 
 rm -rf "$BUILD/Payload"
 mkdir -p "$APP"
 
 echo "[*] compiling..."
 LINKER_FLAGS=()
+CC="clang"
 if [ "$(uname -s)" = "Linux" ]; then
     LINKER_FLAGS=(-fuse-ld=lld)
+elif command -v xcrun >/dev/null 2>&1; then
+    CC="xcrun -sdk iphoneos clang"
 fi
-clang \
+
+EXTRA_LIB=()
+if [ -d "$SDK/usr/lib" ]; then
+    EXTRA_LIB=(-L"$SDK/usr/lib")
+fi
+
+$CC \
     -target arm64-apple-ios14.0 \
     -isysroot "$SDK" \
     "${LINKER_FLAGS[@]}" \
@@ -39,7 +48,7 @@ clang \
     -framework CoreFoundation \
     -framework CoreGraphics \
     -framework WebKit \
-    -L"$SDK/usr/lib" -lz \
+    "${EXTRA_LIB[@]}" -lz \
     "$ROOT/src/main.m" \
     "$ROOT/src/AppDelegate.m" \
     "$ROOT/src/SceneDelegate.m" \
@@ -67,13 +76,18 @@ info["CFBundleIdentifier"] = bundle_id
 with open(path, "wb") as target:
     plistlib.dump(info, target, fmt=plistlib.FMT_XML, sort_keys=False)
 PY
+
 cp "$ROOT/src/respring.html" "$APP/respring.html"
-cp "$ROOT/src/AppIcon.png" "$APP/AppIcon.png"
+if [ -f "$ROOT/src/AppIcon.png" ]; then
+    cp "$ROOT/src/AppIcon.png" "$APP/AppIcon.png"
+fi
+
 for localization in "$ROOT"/src/*.lproj; do
     [ -d "$localization" ] || continue
     cp -R "$localization" "$APP/"
 done
 
 echo "[*] packing..."
+mkdir -p "$BUILD"
 (cd "$BUILD" && zip -qry "KAMUI-$VERSION.ipa" Payload)
 echo "[*] done: $BUILD/KAMUI-$VERSION.ipa"
