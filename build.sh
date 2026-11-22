@@ -40,7 +40,7 @@ fi
 $CC \
     -target arm64-apple-ios14.0 \
     -isysroot "$SDK" \
-    "${LINKER_FLAGS[@]}" \
+    ${LINKER_FLAGS[@]+"${LINKER_FLAGS[@]}"} \
     -fobjc-arc -fblocks -O2 \
     -Wall -Wno-unused-parameter -Wno-deprecated-declarations \
     -framework UIKit \
@@ -48,7 +48,7 @@ $CC \
     -framework CoreFoundation \
     -framework CoreGraphics \
     -framework WebKit \
-    "${EXTRA_LIB[@]}" -lz \
+    ${EXTRA_LIB[@]+"${EXTRA_LIB[@]}"} -lz \
     "$ROOT/src/main.m" \
     "$ROOT/src/AppDelegate.m" \
     "$ROOT/src/SceneDelegate.m" \
